@@ -1,0 +1,160 @@
+#!/bin/bash
+echo "# All settings apply to production only
+
+# connection pool size, sidekiq is set to 5, allowing an extra 3 for bg threads
+db_pool = 8
+
+# database timeout in milliseconds
+db_timeout = 5000
+
+# Disallow prepared statements
+# see: https://github.com/rails/rails/issues/21992
+db_prepared_statements = false
+
+# backup hostname mainly for cdn use
+backup_hostname =
+
+# address of smtp server used to send emails
+smtp_address = smtp.sendgrid.net
+
+# port of smtp server used to send emails
+smtp_port = 587
+
+# domain passed to smtp server
+smtp_domain =
+
+# username for smtp server
+smtp_user_name = dgutride@gmail.com
+
+# password for smtp server
+smtp_password =
+
+# smtp authentication mechanism
+smtp_authentication = plain
+
+# enable TLS encryption for smtp connections
+smtp_enable_start_tls = true
+
+# mode for verifying smtp server certificates
+# to disable, set to 'none'
+smtp_openssl_verify_mode =
+
+# load MiniProfiler in production, to be used by developers
+load_mini_profiler = true
+
+# recommended, cdn used to access assets
+cdn_url =
+
+# comma delimited list of emails that have developer level access
+developer_emails =
+
+# redis database
+redis_db = 0
+
+# redis sentinels eg
+# redis_sentinels = 10.0.0.1:26381,10.0.0.2:26381
+redis_sentinels =
+
+# enable Cross-origin Resource Sharing (CORS) directly at the application level
+enable_cors = false
+cors_origin = ''
+
+# enable if you really need to serve assets in prd
+serve_static_assets = true
+
+# number of sidekiq workers (launched via unicorn master)
+sidekiq_workers = 5
+
+# adjust stylesheets to rtl (requires "rtlit" gem)
+rtl_css = false
+
+# notify admin when a new version of discourse is released
+# this is global so it is easier to set in multisites
+# TODO allow for global overrides
+new_version_emails = true
+
+# connection reaping helps keep connection counts down, postgres
+# will not work properly with huge numbers of open connections
+# reap connections from pool that are older than 30 seconds
+connection_reaper_age = 30
+# run reap check every 30 seconds
+connection_reaper_interval = 30
+# also reap any connections older than this
+connection_reaper_max_age = 600
+
+# set to relative URL (for subdirectory hosting)
+# IMPORTANT: path must not include a trailing /
+# EG: /forum
+relative_url_root =
+
+# redis password
+redis_password = ZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5
+# redis server address
+redis_host = ${OPENSHIFT_REDIS_DB_HOST}
+#redis server port
+redis_port = ${OPENSHIFT_REDIS_DB_PORT}
+
+# host address for db server
+# This is set to blank so it tries to use sockets first
+db_host = ${OPENSHIFT_POSTGRESQL_DB_HOST}
+
+# port running db server, no need to set it
+db_port = ${OPENSHIFT_POSTGRESQL_DB_PORT}
+
+# database name running discourse
+db_name = ${OPENSHIFT_APP_NAME}
+#
+
+# username accessing database
+db_username = ${OPENSHIFT_POSTGRESQL_DB_USERNAME}
+
+# password used to access the db
+db_password = ${OPENSHIFT_POSTGRESQL_DB_PASSWORD}
+#" > "${OPENSHIFT_REPO_DIR}config/discourse.conf"
+
+
+gem install bundler --version 1.9
+gem install image_optim_bin --version 0.0.7
+
+unset TMOUT
+NODE_VERSION="v4.2.4"
+#assets storage between push etc.
+DISCOURSE_PERM_DIR="${OPENSHIFT_DATA_DIR}discourse_data/"
+if ! [ -d "${DISCOURSE_PERM_DIR}" ]; then
+	mkdir "${DISCOURSE_PERM_DIR}"
+fi
+#"install" node for uglifyjs
+if ! [ -d "$OPENSHIFT_DATA_DIR/node-$NODE_VERSION-linux-x64" ] || [ -f "${OPENSHIFT_REPO_DIR}/.openshift/markers/force_clean_build" ]; then
+	echo "Removing old links..."
+	rm "$HOME/.gem/bin/node"
+	rm "$HOME/.gem/bin/npm"
+	echo "Installing node.js in $OPENSHIFT_DATA_DIR"
+	wget "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.gz" -O "$OPENSHIFT_TMP_DIR/node.tar.gz"
+	tar -xf "$OPENSHIFT_TMP_DIR/node.tar.gz" -C "$OPENSHIFT_DATA_DIR"
+	ln -s "$OPENSHIFT_DATA_DIR/node-$NODE_VERSION-linux-x64/bin/node" "$HOME/.gem/bin/"
+	ln -s "$OPENSHIFT_DATA_DIR/node-$NODE_VERSION-linux-x64/bin/npm" "$HOME/.gem/bin/"
+	mkdir "$OPENSHIFT_DATA_DIR/node_modules"
+	mkdir "$OPENSHIFT_DATA_DIR/node-$NODE_VERSION-linux-x64/etc"
+	echo "cache=$OPENSHIFT_DATA_DIR/node_modules/.npm
+	prefix=$OPENSHIFT_DATA_DIR" > "$OPENSHIFT_DATA_DIR/node-$NODE_VERSION-linux-x64/etc/npmrc"
+fi
+
+pushd "$OPENSHIFT_DATA_DIR"
+"$HOME/.gem/bin/npm" install uglifyjs
+popd
+
+if ! [ -f "$HOME/.gem/bin/uglifyjs" ] || [ -f "${OPENSHIFT_REPO_DIR}/.openshift/markers/force_clean_build" ]; then
+	ln -s "$OPENSHIFT_DATA_DIR/node_modules/uglifyjs/bin/uglifyjs" "$HOME/.gem/bin/"
+fi
+
+pushd "${OPENSHIFT_REPO_DIR}"
+RAILS_ENV="production" bundle exec rake db:migrate
+
+if ! [ -d "${DISCOURSE_PERM_DIR}assets/" ] || [ -f "${OPENSHIFT_REPO_DIR}/.openshift/markers/force_clean_build" ]; then
+	"${OPENSHIFT_REPO_DIR}script/assets_tool_openshift.sh" precompile "${DISCOURSE_PERM_DIR}"
+
+fi
+
+"${OPENSHIFT_REPO_DIR}script/assets_tool_openshift.sh" link "${DISCOURSE_PERM_DIR}"
+
+popd
