@@ -88,15 +88,15 @@ connection_reaper_max_age = 600
 relative_url_root =
 
 # redis password
-redis_password = ZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5
+redis_password = redispass
 # redis server address
-redis_host = ${OPENSHIFT_REDIS_DB_HOST}
+redis_host = redis
 #redis server port
 redis_port = ${OPENSHIFT_REDIS_DB_PORT}
 
 # host address for db server
 # This is set to blank so it tries to use sockets first
-db_host = ${OPENSHIFT_POSTGRESQL_DB_HOST}
+db_host = postgresql
 
 # port running db server, no need to set it
 db_port = ${OPENSHIFT_POSTGRESQL_DB_PORT}
@@ -106,10 +106,10 @@ db_name = ${OPENSHIFT_APP_NAME}
 #
 
 # username accessing database
-db_username = ${OPENSHIFT_POSTGRESQL_DB_USERNAME}
+db_username = postgres
 
 # password used to access the db
-db_password = ${OPENSHIFT_POSTGRESQL_DB_PASSWORD}
+db_password = postgres
 #" > "${OPENSHIFT_REPO_DIR}config/discourse.conf"
 
 
